@@ -45,28 +45,36 @@ class TodoListViewController: UITableViewController {
     //MARK: Add new items
     
     @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
-        
-        var textField = UITextField()
         let alert = UIAlertController(title: "Add New Todoey Item", message: "", preferredStyle: .alert)
         alert.addTextField { (alertTextField) in
             alertTextField.placeholder = "Create new item"
-            textField = alertTextField
+            // Add function that performs input validation
+            alertTextField.addTarget(self, action: #selector(self.addNewItemTextFieldChanged), for: .editingChanged)
         }
-        let action = UIAlertAction(title: "Add Item", style: .default) {
+        let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
+        let addItemAction = UIAlertAction(title: "Add Item", style: .default) {
             (action) in
             // What will happen once the user clicks the Add Item button on our UIAlert
-            if textField.text != "" {
-                self.itemArray.append(textField.text!)
-                self.tableView.reloadData()
-            } else {
-                let emptyStringAlert = UIAlertController(title: "", message: "Can not add empty item!", preferredStyle: .alert)
-                let action = UIAlertAction(title: "Ok, I got it", style: .default, handler: nil)
-                emptyStringAlert.addAction(action)
-                self.present(emptyStringAlert, animated: true, completion: nil)
-            }
+            let newItem = alert.textFields![0].text!
+            self.itemArray.append(newItem)
+            self.tableView.reloadData()
         }
-        alert.addAction(action)
+        alert.addAction(cancelAction)
+        alert.addAction(addItemAction)
+        alert.actions[1].isEnabled = false
         present(alert, animated: true, completion: nil)
+    }
+    
+    @objc func addNewItemTextFieldChanged(_ sender: Any) {
+        let alertTextField = sender as! UITextField
+        var responder: UIResponder! = alertTextField
+        // Loop through the reponder chain until we find UIAlertController
+        while !(responder is UIAlertController) {
+            responder = responder.next
+        }
+        let alert = responder as! UIAlertController
+        // Perform input validation and enable Add Item button only when textField is not empty
+        alert.actions[1].isEnabled = (alertTextField.text != "")
     }
 }
 
