@@ -7,21 +7,25 @@
 //
 
 import UIKit
+import CoreData
 
 class TodoListViewController: UITableViewController {
 
     var itemArray = [Item]()
-    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
+    var selectedCategory: Category? {
+        didSet {
+            loadItems()
+        }
+    }
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        print(dataFilePath)
-        
-        loadItems()
+//        print(FileManager.default.urls(for: .documentDirectory, in: .userDomainMask))
+        self.navigationItem.title = selectedCategory?.name
     }
     
-    //MARK: TableView Datasource Methods
+    // MARK: - TableView datasource methods
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for: indexPath)
@@ -35,29 +39,33 @@ class TodoListViewController: UITableViewController {
         return itemArray.count
     }
     
-    //MARK: TableView Delegate Methods
+    // MARK: - TableView delegate methods
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+//        context.delete(itemArray[indexPath.row])
+//        itemArray.remove(at: indexPath.row)
         itemArray[indexPath.row].done = !itemArray[indexPath.row].done
         saveItems()
         tableView.deselectRow(at: indexPath, animated: true)
     }
     
-    //MARK: Add new items
+    // MARK: - Add new items
     
     @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
         let alert = UIAlertController(title: "Add New Todoey Item", message: "", preferredStyle: .alert)
         alert.addTextField { (alertTextField) in
             alertTextField.placeholder = "Create new item"
             // Add function that performs input validation
-            alertTextField.addTarget(self, action: #selector(self.addNewItemTextFieldChanged), for: .editingChanged)
+            alertTextField.addTarget(self, action: #selector(self.alertTextFieldChanged), for: .editingChanged)
         }
         let cancelAction = UIAlertAction(title: "Cancel", style: .cancel)
         let addItemAction = UIAlertAction(title: "Add Item", style: .default) {
             (action) in
             // What will happen once the user clicks the Add Item button on our UIAlert
-            let newItem = Item()
+            let newItem = Item(context: self.context)
             newItem.title = alert.textFields![0].text!
+            newItem.done = false
+            newItem.parentCategory = self.selectedCategory
             self.itemArray.append(newItem)
             self.saveItems()
         }
@@ -67,7 +75,7 @@ class TodoListViewController: UITableViewController {
         present(alert, animated: true, completion: nil)
     }
     
-    @objc func addNewItemTextFieldChanged(_ sender: Any) {
+    @objc func alertTextFieldChanged(_ sender: Any) {
         let alertTextField = sender as! UITextField
         var responder: UIResponder! = alertTextField
         // Loop through the reponder chain until we find UIAlertController
@@ -79,29 +87,53 @@ class TodoListViewController: UITableViewController {
         alert.actions[1].isEnabled = (alertTextField.text != "")
     }
     
-    //MARK: Model manipulation methods
+    // MARK: - Model manipulation methods
     
     func saveItems() {
-        let encoder = PropertyListEncoder()
         do {
-            let data = try encoder.encode(itemArray)
-            try data.write(to: dataFilePath!)
+            try context.save()
         } catch {
-            print("Error encoding item array, \(error)")
+            print("Error saving item \(error)")
         }
         tableView.reloadData()
     }
     
-    func loadItems() {
-        if let data = try? Data(contentsOf: dataFilePath!) {
-            let decoder = PropertyListDecoder()
-            do {
-                itemArray = try decoder.decode([Item].self, from: data)
-            } catch {
-                print("Error decoding item array, \(error)")
-            }
+    func loadItems(with request: NSFetchRequest<Item> =	Item.fetchRequest(), predicate: NSPredicate? = nil) {
+        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
+        if let additionalPredicate = predicate {
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
+        } else {
+            request.predicate = categoryPredicate
         }
+        do {
+            itemArray = try context.fetch(request)
+        } catch {
+            print("Error fetching items \(error)")
+        }
+        tableView.reloadData()
+    }
+}
+
+// MARK: - SearchBar delegate methods
+
+extension TodoListViewController: UISearchBarDelegate {
+    
+    func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        let request: NSFetchRequest<Item> = Item.fetchRequest()
+        let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
+        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
+        loadItems(with: request, predicate: predicate)
     }
     
+    func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        if searchText.count == 0 {
+            loadItems()
+            DispatchQueue.main.async {
+                searchBar.resignFirstResponder()
+            }
+        } else {
+            searchBarSearchButtonClicked(searchBar)
+        }
+    }
 }
 
