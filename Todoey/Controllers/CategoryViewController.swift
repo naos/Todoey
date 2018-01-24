@@ -8,8 +8,10 @@
 
 import UIKit
 import RealmSwift
+import ChameleonFramework
+import SwipeCellKit
 
-class CategoryViewController: UITableViewController {
+class CategoryViewController: SwipeTableViewController {
 
     let realm = try! Realm()
     var categories: Results<Category>?
@@ -17,24 +19,42 @@ class CategoryViewController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         loadCategories()
+        placeholderDataTypeName = "categories"
+        placeholderCellBackgroundColorHexString = "FFFFFF"
     }
     
     // MARK: - TableView datasource methods
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return categories?.count ?? 1
+        // TODO: - check for nil condition
+        return tableDataSourceIsEmpty ? 1 : categories?.count ?? 1
     }
     
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "CategoryCell", for: indexPath)
-        cell.textLabel?.text = categories?[indexPath.row].name ?? "No Categories Added Yet"
+        let cell = super.tableView(tableView, cellForRowAt: indexPath)
+//        print("populating cell in row \(indexPath.row) \(tableDataSourceIsEmpty ? "no \(placeholderDataTypeName)" : "")")
+        if tableDataSourceIsEmpty {
+            return cell
+        }
+        let category = categories![indexPath.row]
+        cell.textLabel?.text = category.name
+        guard let categoryColor = UIColor(hexString: category.color) else {fatalError()}
+        cell.backgroundColor = categoryColor
+        cell.textLabel?.textColor = ContrastColorOf(categoryColor, returnFlat: true)
         return cell
     }
     
     // MARK: - TableView delegate methods
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        performSegue(withIdentifier: "goToItems", sender: self)
+        if let count = categories?.count {
+            if count == 0 {
+                tableView.deselectRow(at: indexPath, animated: true)
+                addButtonPressed(navigationItem.rightBarButtonItem!)
+            } else {
+                performSegue(withIdentifier: "goToItems", sender: self)
+            }
+        }
     }
     
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
@@ -59,6 +79,7 @@ class CategoryViewController: UITableViewController {
             // What will happen once the user clicks the Add Category button on our UIAlert
             let newCategory = Category()
             newCategory.name = alert.textFields![0].text!
+            newCategory.color = UIColor.randomFlat.hexValue()
             self.save(category: newCategory)
         }
         alert.addAction(cancelAction)
@@ -86,6 +107,7 @@ class CategoryViewController: UITableViewController {
             try realm.write {
                 realm.add(category)
             }
+            tableDataSourceIsEmpty = categories!.isEmpty
         } catch {
             print("Error saving category \(error)")
         }
@@ -94,7 +116,24 @@ class CategoryViewController: UITableViewController {
     
     func loadCategories() {
         categories = realm.objects(Category.self)
+        tableDataSourceIsEmpty = categories!.isEmpty
         tableView.reloadData()
     }
     
+    // MARK: - Delete data from swipe
+    
+    override func updateModel(at indexPath: IndexPath) {
+        if let categoryForDeletion = categories?[indexPath.row] {
+            do {
+                try realm.write {
+                    realm.delete(categoryForDeletion)
+                }
+                tableDataSourceIsEmpty = categories!.isEmpty
+            } catch {
+                print("Error deleting category, \(error)")
+            }
+        }
+    }
+    
 }
+
