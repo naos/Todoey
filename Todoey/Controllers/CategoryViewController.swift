@@ -47,13 +47,11 @@ class CategoryViewController: SwipeTableViewController {
     // MARK: - TableView delegate methods
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        if let count = categories?.count {
-            if count == 0 {
-                tableView.deselectRow(at: indexPath, animated: true)
-                addButtonPressed(navigationItem.rightBarButtonItem!)
-            } else {
-                performSegue(withIdentifier: "goToItems", sender: self)
-            }
+        if tableDataSourceIsEmpty {
+            tableView.deselectRow(at: indexPath, animated: true)
+            addButtonPressed(navigationItem.rightBarButtonItem!)
+        } else {
+            performSegue(withIdentifier: "goToItems", sender: self)
         }
     }
     
@@ -115,7 +113,7 @@ class CategoryViewController: SwipeTableViewController {
     }
     
     func loadCategories() {
-        categories = realm.objects(Category.self)
+        categories = realm.objects(Category.self).sorted(byKeyPath: "dateCreated", ascending: true)
         tableDataSourceIsEmpty = categories!.isEmpty
         tableView.reloadData()
     }
